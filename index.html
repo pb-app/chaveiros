@@ -93,14 +93,21 @@
         
         <div id="preview-container">
             <canvas id="preview-canvas"></canvas>
+
+            <label class="help-text" style="color:#d9534f;">Estilo do Relevo (Desenho):</label>
+            <select id="extraction-mode">
+                <option value="silhouette">Letras Maciças (Usa silhueta do PNG)</option>
+                <option value="contrast">Letras Vazadas (Traça por Contraste)</option>
+            </select>
             
-            <div class="checkbox-group">
-                <input type="checkbox" id="invert-colors">
-                <label for="invert-colors">Inverter Fundo</label>
+            <div id="contrast-controls" style="display:none; padding: 10px; background: #eee; border-radius: 4px; margin-bottom: 15px;">
+                <div class="checkbox-group" style="margin-bottom: 10px; border: none; padding: 0;">
+                    <input type="checkbox" id="invert-colors">
+                    <label for="invert-colors">Inverter Fundo</label>
+                </div>
+                <label for="threshold" class="help-text">Ajuste de Detalhe:</label>
+                <input type="range" id="threshold" min="1" max="254" value="128" style="margin-bottom: 0;">
             </div>
-            
-            <label for="threshold" class="help-text">Ajuste de Detalhe:</label>
-            <input type="range" id="threshold" min="1" max="254" value="128">
 
             <hr style="border: 0; border-top: 1px solid #ddd; margin: 15px 0;">
 
@@ -185,6 +192,11 @@
             document.getElementById('img-upload').addEventListener('change', handleImageUpload);
             document.getElementById('threshold').addEventListener('input', updatePreviewCanvas);
             document.getElementById('invert-colors').addEventListener('change', updatePreviewCanvas);
+            document.getElementById('extraction-mode').addEventListener('change', function() {
+                const isContrast = this.value === 'contrast';
+                document.getElementById('contrast-controls').style.display = isContrast ? 'block' : 'none';
+                updatePreviewCanvas();
+            });
             document.getElementById('generate-btn').addEventListener('click', processPreviewTo3D);
             document.getElementById('export-btn').addEventListener('click', exportSTL);
             window.addEventListener('resize', onWindowResize);
@@ -234,29 +246,42 @@
 
             const imageData = ctx.getImageData(0, 0, width, height);
             const data = imageData.data;
+            
+            const extractionMode = document.getElementById('extraction-mode').value;
             const invert = document.getElementById('invert-colors').checked;
             const threshold = parseInt(document.getElementById('threshold').value);
 
             for (let i = 0; i < data.length; i += 4) {
-                if (data[i+3] < 50) {
-                    data[i] = 255; data[i+1] = 255; data[i+2] = 255; data[i+3] = 255;
-                    continue;
-                }
+                const alpha = data[i+3];
 
-                const brightness = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114);
-                let isSolid = brightness < threshold; 
-                if (invert) isSolid = brightness >= threshold; 
-
-                if (isSolid) {
-                    data[i] = 0; data[i+1] = 0; data[i+2] = 0; data[i+3] = 255; 
+                if (extractionMode === 'silhouette') {
+                    // Modo Maciço: Ignora as cores internas, transforma tudo que não for transparente em bloco sólido.
+                    if (alpha > 20) {
+                        data[i] = 0; data[i+1] = 0; data[i+2] = 0; data[i+3] = 255; // Preto (Relevo)
+                    } else {
+                        data[i] = 255; data[i+1] = 255; data[i+2] = 255; data[i+3] = 255; // Branco (Fundo)
+                    }
                 } else {
-                    data[i] = 255; data[i+1] = 255; data[i+2] = 255; data[i+3] = 255; 
+                    // Modo Vazado: Verifica contraste pixel a pixel
+                    if (alpha < 50) {
+                        data[i] = 255; data[i+1] = 255; data[i+2] = 255; data[i+3] = 255;
+                        continue;
+                    }
+
+                    const brightness = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114);
+                    let isSolid = brightness < threshold; 
+                    if (invert) isSolid = brightness >= threshold; 
+
+                    if (isSolid) {
+                        data[i] = 0; data[i+1] = 0; data[i+2] = 0; data[i+3] = 255; 
+                    } else {
+                        data[i] = 255; data[i+1] = 255; data[i+2] = 255; data[i+3] = 255; 
+                    }
                 }
             }
             ctx.putImageData(imageData, 0, 0);
         }
 
-        // Função auxiliar que transforma o ImageTracer em uma Promise (facilita o código)
         function traceToSVG(dataUrl, options) {
             return new Promise(resolve => {
                 ImageTracer.imageToSVG(dataUrl, resolve, options);
@@ -268,7 +293,6 @@
             document.getElementById('generate-btn').disabled = true;
 
             const baseShapeType = document.getElementById('base-shape').value;
-            
             const previewCanvas = document.getElementById('preview-canvas');
             const logoDataUrl = previewCanvas.toDataURL('image/png');
 
@@ -278,41 +302,34 @@
             };
 
             try {
-                // 1. Gera o SVG da Logo
                 const logoSvg = await traceToSVG(logoDataUrl, tracerOptions);
                 let contourSvg = null;
 
-                // 2. Se for Contorno, criamos uma imagem expandida (dilatada) para gerar a base
                 if (baseShapeType === 'contour') {
                     const offCanvas = document.createElement('canvas');
                     offCanvas.width = previewCanvas.width;
                     offCanvas.height = previewCanvas.height;
                     const offCtx = offCanvas.getContext('2d');
                     
-                    // Aplica um borrão forte para expandir a área preta
                     offCtx.filter = 'blur(15px)';
-                    // Desenhamos várias vezes para deixar o borrão bem sólido
                     for(let i=0; i<5; i++) offCtx.drawImage(previewCanvas, 0, 0);
                     offCtx.filter = 'none';
 
                     const imgData = offCtx.getImageData(0,0,offCanvas.width, offCanvas.height);
                     const data = imgData.data;
                     
-                    // Tudo que o borrão tocou (não é 100% branco) vira preto sólido
                     for(let i=0; i<data.length; i+=4) {
                         const brightness = (data[i] + data[i+1] + data[i+2]) / 3;
-                        if (brightness < 245) { // Se tem qualquer sombra do borrão
+                        if (brightness < 245) { 
                             data[i] = 0; data[i+1] = 0; data[i+2] = 0; data[i+3] = 255;
                         } else {
                             data[i] = 255; data[i+1] = 255; data[i+2] = 255; data[i+3] = 255;
                         }
                     }
                     offCtx.putImageData(imgData, 0, 0);
-                    
                     contourSvg = await traceToSVG(offCanvas.toDataURL('image/png'), tracerOptions);
                 }
 
-                // 3. Monta as peças no Three.js
                 build3DScene(logoSvg, contourSvg);
 
             } catch (error) {
@@ -338,7 +355,6 @@
             const loader = new SVGLoader();
             const logoGroup = new THREE.Group();
 
-            // === CONSTRUÇÃO DO RELEVO (LOGO) ===
             const logoSvgData = loader.parse(logoSvgText);
             const logoExtrudeSettings = { depth: logoThick, bevelEnabled: false };
 
@@ -352,31 +368,27 @@
                 }
             }
 
-            // Escala padrão
             const GLOBAL_SCALE = 0.05;
             logoGroup.scale.set(GLOBAL_SCALE, -GLOBAL_SCALE, 1); 
 
             const box = new THREE.Box3().setFromObject(logoGroup);
             if (box.isEmpty()) return;
 
-            // Encontra o centro exato do desenho e o tamanho
             const center = new THREE.Vector3();
             box.getCenter(center);
             const size = new THREE.Vector3();
             box.getSize(size);
 
-            // Move a logo para o eixo 0,0 do mundo, e a levanta na altura da base
             logoGroup.position.set(-center.x, -center.y, baseThick);
             
             const centeredLogoContainer = new THREE.Group();
             centeredLogoContainer.add(logoGroup);
             keychainGroup.add(centeredLogoContainer);
 
-            // === CONSTRUÇÃO DA BASE ===
             if (baseShapeType === 'contour' && contourSvgText) {
                 const baseGroup = new THREE.Group();
                 const baseSvgData = loader.parse(contourSvgText);
-                const baseExtrudeSettings = { depth: baseThick, bevelEnabled: false }; // Sem chanfro no contorno para não deformar caminhos complexos
+                const baseExtrudeSettings = { depth: baseThick, bevelEnabled: false }; 
 
                 for (const path of baseSvgData.paths) {
                     if (path.color && (path.color.r > 0.8 && path.color.g > 0.8 && path.color.b > 0.8)) continue;
@@ -388,14 +400,12 @@
                     }
                 }
 
-                // Aplica EXATAMENTE a mesma escala e posição da logo para alinhamento perfeito
                 baseGroup.scale.set(GLOBAL_SCALE, -GLOBAL_SCALE, 1);
                 baseGroup.position.set(-center.x, -center.y, 0);
                 keychainGroup.add(baseGroup);
 
             } else {
-                // Formas Geométricas Simples
-                const margin = 4; // Borda além do desenho
+                const margin = 4; 
                 let baseShape;
 
                 if (baseShapeType === 'rect') {
@@ -413,7 +423,6 @@
 
                 const baseGeometry = new THREE.ExtrudeGeometry(baseShape, baseExtrudeSettings);
                 
-                // Centraliza a malha retangular/circular
                 if (baseShapeType === 'rect') {
                     baseGeometry.translate(-(size.x + margin*2)/2, -(size.y + margin*2)/2, 0);
                 }
@@ -451,7 +460,7 @@
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = 'Chaveiro_Personalizado.stl';
+            link.download = 'Chaveiro_3D.stl';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
