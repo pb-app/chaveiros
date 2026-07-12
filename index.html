@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Modelador de Chaveiro 3D - Imagens</title>
+    <title>Modelador de Chaveiro 3D</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #f0f0f0; font-family: sans-serif; }
         #canvas-container { width: 100vw; height: 100vh; }
@@ -32,13 +32,16 @@
             color: #222;
             font-size: 15px;
         }
-        button, input[type="file"], input[type="range"] {
+        button, input[type="file"], input[type="range"], select, input[type="number"] {
             display: block;
-            margin-top: 10px;
+            margin-top: 5px;
             margin-bottom: 15px;
             width: 100%;
             box-sizing: border-box;
             cursor: pointer;
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
         }
         .checkbox-group {
             display: flex;
@@ -48,19 +51,15 @@
             background: #f9f9f9;
             padding: 8px;
             border-radius: 4px;
+            border: 1px solid #eee;
         }
-        .checkbox-group input {
-            margin-right: 8px;
-            cursor: pointer;
-        }
+        .checkbox-group input { margin-right: 8px; cursor: pointer; width: auto; margin-bottom: 0; }
+        .row-group { display: flex; gap: 10px; margin-bottom: 15px; }
+        .row-group div { flex: 1; }
+        .row-group label { font-size: 12px; font-weight: bold; }
+        
         button {
-            background-color: #007bff;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-weight: bold;
-            padding: 12px;
-            transition: background 0.2s;
+            background-color: #007bff; color: white; border: none; font-weight: bold; padding: 12px; transition: background 0.2s;
         }
         button:hover { background-color: #0056b3; }
         button:disabled { background-color: #ccc; cursor: not-allowed; }
@@ -69,22 +68,12 @@
         h2 { margin-top: 0; font-size: 18px; margin-bottom: 5px; }
         
         #preview-container {
-            display: none;
-            margin-bottom: 15px;
-            padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 4px;
-            background: #fafafa;
+            display: none; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #fafafa;
         }
         #preview-canvas {
-            width: 100%;
-            height: auto;
-            max-height: 150px;
-            object-fit: contain;
-            border: 1px solid #aaa;
-            background-color: #fff; /* Fundo branco para visualização clara */
+            width: 100%; height: auto; max-height: 150px; object-fit: contain; border: 1px solid #aaa; background-color: #fff; margin-bottom: 10px;
         }
-        .help-text { font-size: 12px; color: #666; margin-bottom: 5px; display: block; }
+        .help-text { font-size: 12px; color: #666; margin-bottom: 5px; display: block; font-weight: bold; }
         #loading { display: none; color: #ff6600; font-size: 14px; font-weight: bold; margin-bottom: 10px; text-align: center; }
     </style>
     
@@ -99,25 +88,44 @@
             Supervisor Turno 3
         </div>
 
-        <label for="img-upload">1. Suba uma Imagem (.PNG ou .JPG):</label>
+        <label class="help-text">1. Imagem (.PNG / .JPG):</label>
         <input type="file" id="img-upload" accept=".png, .jpg, .jpeg">
         
         <div id="preview-container">
-            <span class="help-text"><strong>Pré-visualização:</strong> O que estiver em PRETO será o desenho 3D.</span>
             <canvas id="preview-canvas"></canvas>
             
             <div class="checkbox-group">
                 <input type="checkbox" id="invert-colors">
-                <label for="invert-colors">Inverter (Usar se o fundo for escuro)</label>
+                <label for="invert-colors">Inverter Fundo</label>
             </div>
-
+            
             <label for="threshold" class="help-text">Ajuste de Detalhe:</label>
             <input type="range" id="threshold" min="1" max="254" value="128">
+
+            <hr style="border: 0; border-top: 1px solid #ddd; margin: 15px 0;">
+
+            <label class="help-text">Formato da Base:</label>
+            <select id="base-shape">
+                <option value="contour">Contorno da Logo</option>
+                <option value="rect">Retângulo Arredondado</option>
+                <option value="circle">Círculo</option>
+            </select>
+
+            <div class="row-group">
+                <div>
+                    <label>Base (mm):</label>
+                    <input type="number" id="base-thickness" value="3" min="1" max="20" step="0.5">
+                </div>
+                <div>
+                    <label>Relevo (mm):</label>
+                    <input type="number" id="logo-thickness" value="2" min="0.5" max="20" step="0.5">
+                </div>
+            </div>
 
             <button id="generate-btn">2. Gerar 3D</button>
         </div>
 
-        <div id="loading">Processando malha 3D...</div>
+        <div id="loading">Modelando peças... aguarde.</div>
         
         <button id="export-btn" style="display:none;">3. Exportar STL</button>
     </div>
@@ -143,9 +151,6 @@
         let keychainGroup; 
         let originalImageObj = null;
 
-        const BASE_THICKNESS = 3; 
-        const LOGO_THICKNESS = 2; 
-
         init();
         animate();
 
@@ -155,7 +160,7 @@
             scene.background = new THREE.Color(0xe0e0e0);
 
             camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
-            camera.position.set(0, -60, 60);
+            camera.position.set(0, -80, 80);
 
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
@@ -173,11 +178,10 @@
             directionalLight.castShadow = true;
             scene.add(directionalLight);
 
-            const gridHelper = new THREE.GridHelper(100, 10);
+            const gridHelper = new THREE.GridHelper(150, 15);
             gridHelper.rotation.x = Math.PI / 2; 
             scene.add(gridHelper);
 
-            // Eventos da Interface
             document.getElementById('img-upload').addEventListener('change', handleImageUpload);
             document.getElementById('threshold').addEventListener('input', updatePreviewCanvas);
             document.getElementById('invert-colors').addEventListener('change', updatePreviewCanvas);
@@ -191,10 +195,7 @@
             if (!file) return;
 
             document.getElementById('export-btn').style.display = 'none';
-            if (keychainGroup) {
-                scene.remove(keychainGroup);
-                keychainGroup = null;
-            }
+            if (keychainGroup) scene.remove(keychainGroup);
 
             const reader = new FileReader();
             reader.onload = function(e) {
@@ -227,7 +228,6 @@
             canvas.width = width;
             canvas.height = height;
 
-            // Preenche o fundo inicial com branco sólido para anular transparências
             ctx.fillStyle = '#ffffff';
             ctx.fillRect(0, 0, width, height);
             ctx.drawImage(originalImageObj, 0, 0, width, height);
@@ -237,147 +237,191 @@
             const invert = document.getElementById('invert-colors').checked;
             const threshold = parseInt(document.getElementById('threshold').value);
 
-            // Filtro rigoroso: Preto Absoluto ou Branco Absoluto
             for (let i = 0; i < data.length; i += 4) {
-                const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
-                
-                // Se era transparente, forçamos a ser branco (fundo)
-                if (a < 50) {
+                if (data[i+3] < 50) {
                     data[i] = 255; data[i+1] = 255; data[i+2] = 255; data[i+3] = 255;
                     continue;
                 }
 
-                const brightness = (r * 0.299 + g * 0.587 + b * 0.114);
+                const brightness = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114);
                 let isSolid = brightness < threshold; 
-                
-                if (invert) {
-                    isSolid = brightness >= threshold; 
-                }
+                if (invert) isSolid = brightness >= threshold; 
 
                 if (isSolid) {
-                    // Pinta de preto sólido (Peça 3D)
                     data[i] = 0; data[i+1] = 0; data[i+2] = 0; data[i+3] = 255; 
                 } else {
-                    // Pinta de branco sólido (Fundo a ser descartado)
                     data[i] = 255; data[i+1] = 255; data[i+2] = 255; data[i+3] = 255; 
                 }
             }
-            
             ctx.putImageData(imageData, 0, 0);
         }
 
-        function processPreviewTo3D() {
-            const canvas = document.getElementById('preview-canvas');
-            const processedDataUrl = canvas.toDataURL('image/png');
+        // Função auxiliar que transforma o ImageTracer em uma Promise (facilita o código)
+        function traceToSVG(dataUrl, options) {
+            return new Promise(resolve => {
+                ImageTracer.imageToSVG(dataUrl, resolve, options);
+            });
+        }
 
+        async function processPreviewTo3D() {
             document.getElementById('loading').style.display = 'block';
             document.getElementById('generate-btn').disabled = true;
 
-            // Paleta fixa para o rastreador: Só existe Preto e Branco, eliminando erros
+            const baseShapeType = document.getElementById('base-shape').value;
+            
+            const previewCanvas = document.getElementById('preview-canvas');
+            const logoDataUrl = previewCanvas.toDataURL('image/png');
+
             const tracerOptions = {
-                ltres: 1,
-                qtres: 1,
-                pathomit: 10, // Tolerância para detalhes pequenos
-                colorsampling: 0,
+                ltres: 1, qtres: 1, pathomit: 10, colorsampling: 0,
                 pal: [{r:0,g:0,b:0,a:255}, {r:255,g:255,b:255,a:255}] 
             };
 
-            ImageTracer.imageToSVG(processedDataUrl, function(svgString) {
-                generateKeychainFromSVG(svgString);
-                document.getElementById('loading').style.display = 'none';
-                document.getElementById('generate-btn').disabled = false;
-            }, tracerOptions);
-        }
+            try {
+                // 1. Gera o SVG da Logo
+                const logoSvg = await traceToSVG(logoDataUrl, tracerOptions);
+                let contourSvg = null;
 
-        function generateKeychainFromSVG(svgText) {
-            if (keychainGroup) {
-                scene.remove(keychainGroup);
-            }
+                // 2. Se for Contorno, criamos uma imagem expandida (dilatada) para gerar a base
+                if (baseShapeType === 'contour') {
+                    const offCanvas = document.createElement('canvas');
+                    offCanvas.width = previewCanvas.width;
+                    offCanvas.height = previewCanvas.height;
+                    const offCtx = offCanvas.getContext('2d');
+                    
+                    // Aplica um borrão forte para expandir a área preta
+                    offCtx.filter = 'blur(15px)';
+                    // Desenhamos várias vezes para deixar o borrão bem sólido
+                    for(let i=0; i<5; i++) offCtx.drawImage(previewCanvas, 0, 0);
+                    offCtx.filter = 'none';
 
-            keychainGroup = new THREE.Group();
-            
-            const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5 });
-            const logoMaterial = new THREE.MeshStandardMaterial({ color: 0xff6600, roughness: 0.5 });
-
-            const loader = new SVGLoader();
-            const svgData = loader.parse(svgText);
-            const logoGroup = new THREE.Group();
-
-            const logoExtrudeSettings = { depth: LOGO_THICKNESS, bevelEnabled: false };
-
-            for (const path of svgData.paths) {
-                // SEGREDO AQUI: O motor SVGLoader tenta ler a cor do caminho.
-                // Tudo que for claro (branco), nós ignoramos, pois é o fundo da imagem.
-                if (path.color) {
-                    const r = path.color.r;
-                    const g = path.color.g;
-                    const b = path.color.b;
-                    // Se os valores RGB estiverem altos, é um tom claro/branco. Pula essa etapa.
-                    if (r > 0.8 && g > 0.8 && b > 0.8) {
-                        continue; 
+                    const imgData = offCtx.getImageData(0,0,offCanvas.width, offCanvas.height);
+                    const data = imgData.data;
+                    
+                    // Tudo que o borrão tocou (não é 100% branco) vira preto sólido
+                    for(let i=0; i<data.length; i+=4) {
+                        const brightness = (data[i] + data[i+1] + data[i+2]) / 3;
+                        if (brightness < 245) { // Se tem qualquer sombra do borrão
+                            data[i] = 0; data[i+1] = 0; data[i+2] = 0; data[i+3] = 255;
+                        } else {
+                            data[i] = 255; data[i+1] = 255; data[i+2] = 255; data[i+3] = 255;
+                        }
                     }
+                    offCtx.putImageData(imgData, 0, 0);
+                    
+                    contourSvg = await traceToSVG(offCanvas.toDataURL('image/png'), tracerOptions);
                 }
 
+                // 3. Monta as peças no Three.js
+                build3DScene(logoSvg, contourSvg);
+
+            } catch (error) {
+                console.error(error);
+                alert("Erro ao processar imagem.");
+            }
+
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('generate-btn').disabled = false;
+        }
+
+        function build3DScene(logoSvgText, contourSvgText) {
+            if (keychainGroup) scene.remove(keychainGroup);
+            keychainGroup = new THREE.Group();
+            
+            const baseThick = parseFloat(document.getElementById('base-thickness').value);
+            const logoThick = parseFloat(document.getElementById('logo-thickness').value);
+            const baseShapeType = document.getElementById('base-shape').value;
+
+            const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.6 });
+            const logoMaterial = new THREE.MeshStandardMaterial({ color: 0xff6600, roughness: 0.4 });
+
+            const loader = new SVGLoader();
+            const logoGroup = new THREE.Group();
+
+            // === CONSTRUÇÃO DO RELEVO (LOGO) ===
+            const logoSvgData = loader.parse(logoSvgText);
+            const logoExtrudeSettings = { depth: logoThick, bevelEnabled: false };
+
+            for (const path of logoSvgData.paths) {
+                if (path.color && (path.color.r > 0.8 && path.color.g > 0.8 && path.color.b > 0.8)) continue; 
                 const shapes = SVGLoader.createShapes(path);
                 for (const shape of shapes) {
-                    const geometry = new THREE.ExtrudeGeometry(shape, logoExtrudeSettings);
-                    const mesh = new THREE.Mesh(geometry, logoMaterial);
-                    mesh.castShadow = true;
-                    mesh.receiveShadow = true;
+                    const mesh = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, logoExtrudeSettings), logoMaterial);
+                    mesh.castShadow = true; mesh.receiveShadow = true;
                     logoGroup.add(mesh);
                 }
             }
 
-            // Escala a logo
-            logoGroup.scale.set(0.05, -0.05, 1); 
+            // Escala padrão
+            const GLOBAL_SCALE = 0.05;
+            logoGroup.scale.set(GLOBAL_SCALE, -GLOBAL_SCALE, 1); 
 
-            // Mede o tamanho e acha o centro do que foi gerado
             const box = new THREE.Box3().setFromObject(logoGroup);
-            
-            // Verificação de segurança: se nada for desenhado
-            if (box.isEmpty()) {
-                alert("Nenhum detalhe escuro encontrado. Ajuste a barra de detalhe.");
-                return;
-            }
+            if (box.isEmpty()) return;
 
+            // Encontra o centro exato do desenho e o tamanho
             const center = new THREE.Vector3();
             box.getCenter(center);
             const size = new THREE.Vector3();
             box.getSize(size);
 
-            // Alinha
-            logoGroup.position.x = -center.x;
-            logoGroup.position.y = -center.y;
-            logoGroup.position.z = BASE_THICKNESS; 
-
+            // Move a logo para o eixo 0,0 do mundo, e a levanta na altura da base
+            logoGroup.position.set(-center.x, -center.y, baseThick);
+            
             const centeredLogoContainer = new THREE.Group();
             centeredLogoContainer.add(logoGroup);
-
-            // Cria a base da proporção correta
-            const margin = 4;
-            const baseWidth = size.x + margin;
-            const baseHeight = size.y + margin;
-
-            const baseShape = createRoundedRectShape(baseWidth, baseHeight, 2); 
-            
-            const baseExtrudeSettings = {
-                depth: BASE_THICKNESS,
-                bevelEnabled: true,
-                bevelSegments: 2,
-                bevelSteps: 1,
-                bevelSize: 0.5,
-                bevelThickness: 0.5
-            };
-
-            const baseGeometry = new THREE.ExtrudeGeometry(baseShape, baseExtrudeSettings);
-            baseGeometry.translate(-baseWidth / 2, -baseHeight / 2, 0);
-
-            const baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
-            baseMesh.castShadow = true;
-            baseMesh.receiveShadow = true;
-
-            keychainGroup.add(baseMesh);
             keychainGroup.add(centeredLogoContainer);
+
+            // === CONSTRUÇÃO DA BASE ===
+            if (baseShapeType === 'contour' && contourSvgText) {
+                const baseGroup = new THREE.Group();
+                const baseSvgData = loader.parse(contourSvgText);
+                const baseExtrudeSettings = { depth: baseThick, bevelEnabled: false }; // Sem chanfro no contorno para não deformar caminhos complexos
+
+                for (const path of baseSvgData.paths) {
+                    if (path.color && (path.color.r > 0.8 && path.color.g > 0.8 && path.color.b > 0.8)) continue;
+                    const shapes = SVGLoader.createShapes(path);
+                    for (const shape of shapes) {
+                        const mesh = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, baseExtrudeSettings), baseMaterial);
+                        mesh.castShadow = true; mesh.receiveShadow = true;
+                        baseGroup.add(mesh);
+                    }
+                }
+
+                // Aplica EXATAMENTE a mesma escala e posição da logo para alinhamento perfeito
+                baseGroup.scale.set(GLOBAL_SCALE, -GLOBAL_SCALE, 1);
+                baseGroup.position.set(-center.x, -center.y, 0);
+                keychainGroup.add(baseGroup);
+
+            } else {
+                // Formas Geométricas Simples
+                const margin = 4; // Borda além do desenho
+                let baseShape;
+
+                if (baseShapeType === 'rect') {
+                    const baseWidth = size.x + margin * 2;
+                    const baseHeight = size.y + margin * 2;
+                    baseShape = createRoundedRectShape(baseWidth, baseHeight, 3);
+                } else if (baseShapeType === 'circle') {
+                    const radius = (Math.max(size.x, size.y) / 2) + margin;
+                    baseShape = new THREE.Shape().absarc(0, 0, radius, 0, Math.PI * 2);
+                }
+
+                const baseExtrudeSettings = {
+                    depth: baseThick, bevelEnabled: true, bevelSegments: 2, bevelSteps: 1, bevelSize: 0.5, bevelThickness: 0.5
+                };
+
+                const baseGeometry = new THREE.ExtrudeGeometry(baseShape, baseExtrudeSettings);
+                
+                // Centraliza a malha retangular/circular
+                if (baseShapeType === 'rect') {
+                    baseGeometry.translate(-(size.x + margin*2)/2, -(size.y + margin*2)/2, 0);
+                }
+                
+                const baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
+                baseMesh.castShadow = true; baseMesh.receiveShadow = true;
+                keychainGroup.add(baseMesh);
+            }
 
             scene.add(keychainGroup);
             document.getElementById('export-btn').style.display = 'block';
@@ -400,16 +444,14 @@
 
         function exportSTL() {
             if (!keychainGroup) return;
-            
             const exporter = new STLExporter();
             const stlString = exporter.parse(keychainGroup);
             
             const blob = new Blob([stlString], { type: 'text/plain' });
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
-            link.style.display = 'none';
             link.href = url;
-            link.download = 'Chaveiro_Driele_Gerado.stl';
+            link.download = 'Chaveiro_Personalizado.stl';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
