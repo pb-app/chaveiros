@@ -16,7 +16,9 @@
             border-radius: 8px;
             box-shadow: 0 4px 6px rgba(0,0,0,0.1);
             z-index: 10;
-            max-width: 300px;
+            width: 320px;
+            max-height: 90vh;
+            overflow-y: auto;
         }
         .user-info {
             font-size: 13px;
@@ -30,11 +32,10 @@
             color: #222;
             font-size: 15px;
         }
-        button, input[type="file"] {
+        button, input[type="file"], input[type="range"] {
             display: block;
             margin-top: 10px;
             margin-bottom: 15px;
-            padding: 8px;
             width: 100%;
             box-sizing: border-box;
             cursor: pointer;
@@ -44,6 +45,9 @@
             align-items: center;
             margin-bottom: 15px;
             font-size: 14px;
+            background: #f9f9f9;
+            padding: 8px;
+            border-radius: 4px;
         }
         .checkbox-group input {
             margin-right: 8px;
@@ -55,14 +59,37 @@
             border: none;
             border-radius: 4px;
             font-weight: bold;
-            padding: 10px;
+            padding: 12px;
+            transition: background 0.2s;
         }
         button:hover { background-color: #0056b3; }
+        button:disabled { background-color: #ccc; cursor: not-allowed; }
+        #export-btn { background-color: #28a745; margin-top: 10px; }
+        #export-btn:hover { background-color: #218838; }
         h2 { margin-top: 0; font-size: 18px; margin-bottom: 5px; }
-        #loading { display: none; color: #ff6600; font-size: 14px; font-weight: bold; margin-bottom: 10px; }
+        
+        #preview-container {
+            display: none;
+            margin-bottom: 15px;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            background: #fafafa;
+        }
+        #preview-canvas {
+            width: 100%;
+            height: auto;
+            max-height: 150px;
+            object-fit: contain;
+            background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%);
+            background-size: 20px 20px;
+            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
+            border: 1px solid #aaa;
+        }
+        .help-text { font-size: 12px; color: #666; margin-bottom: 5px; display: block; }
+        #loading { display: none; color: #ff6600; font-size: 14px; font-weight: bold; margin-bottom: 10px; text-align: center; }
     </style>
     
-    <!-- Biblioteca para transformar PNG/JPG em Vetor no navegador -->
     <script src="https://cdn.jsdelivr.net/npm/imagetracerjs@1.2.6/imagetracer_v1.2.6.js"></script>
 </head>
 <body>
@@ -74,22 +101,31 @@
             Supervisor Turno 3
         </div>
 
-        <label for="img-upload">1. Suba uma Logo (.PNG ou .JPG):</label>
+        <label for="img-upload">1. Suba uma Imagem (.PNG ou .JPG):</label>
         <input type="file" id="img-upload" accept=".png, .jpg, .jpeg">
         
-        <div class="checkbox-group">
-            <input type="checkbox" id="invert-colors">
-            <label for="invert-colors">Logo clara / Fundo escuro (Inverter)</label>
+        <div id="preview-container">
+            <span class="help-text"><strong>Pré-visualização:</strong> O que estiver em PRETO será o desenho 3D.</span>
+            <canvas id="preview-canvas"></canvas>
+            
+            <div class="checkbox-group">
+                <input type="checkbox" id="invert-colors">
+                <label for="invert-colors">Inverter (Usar se o fundo for escuro)</label>
+            </div>
+
+            <label for="threshold" class="help-text">Ajuste de Detalhe:</label>
+            <input type="range" id="threshold" min="1" max="254" value="128">
+
+            <button id="generate-btn">2. Gerar 3D</button>
         </div>
 
-        <div id="loading">Processando imagem...</div>
+        <div id="loading">Processando malha 3D...</div>
         
-        <button id="export-btn" style="display:none;">2. Exportar STL</button>
+        <button id="export-btn" style="display:none;">3. Exportar STL</button>
     </div>
 
     <div id="canvas-container"></div>
 
-    <!-- Importando o Three.js e seus addons usando ES Modules -->
     <script type="importmap">
         {
             "imports": {
@@ -107,9 +143,10 @@
 
         let scene, camera, renderer, controls;
         let keychainGroup; 
+        let originalImageObj = null;
 
-        const BASE_THICKNESS = 3; // Altura da base em mm
-        const LOGO_THICKNESS = 2; // Altura do relevo da logo em mm
+        const BASE_THICKNESS = 3; 
+        const LOGO_THICKNESS = 2; 
 
         init();
         animate();
@@ -142,7 +179,11 @@
             gridHelper.rotation.x = Math.PI / 2; 
             scene.add(gridHelper);
 
+            // Eventos da Interface
             document.getElementById('img-upload').addEventListener('change', handleImageUpload);
+            document.getElementById('threshold').addEventListener('input', updatePreviewCanvas);
+            document.getElementById('invert-colors').addEventListener('change', updatePreviewCanvas);
+            document.getElementById('generate-btn').addEventListener('click', processPreviewTo3D);
             document.getElementById('export-btn').addEventListener('click', exportSTL);
             window.addEventListener('resize', onWindowResize);
         }
@@ -151,68 +192,105 @@
             const file = event.target.files[0];
             if (!file) return;
 
-            document.getElementById('loading').style.display = 'block';
             document.getElementById('export-btn').style.display = 'none';
+            if (keychainGroup) {
+                scene.remove(keychainGroup);
+                keychainGroup = null;
+            }
 
             const reader = new FileReader();
             reader.onload = function(e) {
                 const img = new Image();
                 img.onload = function() {
-                    processImageTo3D(img);
+                    originalImageObj = img;
+                    document.getElementById('preview-container').style.display = 'block';
+                    updatePreviewCanvas();
                 };
                 img.src = e.target.result;
             };
             reader.readAsDataURL(file);
         }
 
-        function processImageTo3D(img) {
-            // 1. Preparamos um Canvas para limpar a imagem (remover fundo branco)
-            const canvas = document.createElement('canvas');
-            canvas.width = img.width;
-            canvas.height = img.height;
-            const ctx = canvas.getContext('2d');
-            ctx.drawImage(img, 0, 0);
+        // Atualiza a visualização 2D em tempo real baseada nos ajustes
+        function updatePreviewCanvas() {
+            if (!originalImageObj) return;
 
-            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const canvas = document.getElementById('preview-canvas');
+            const ctx = canvas.getContext('2d');
+
+            // Limita o tamanho para não travar o navegador no processamento
+            const MAX_WIDTH = 600;
+            let width = originalImageObj.width;
+            let height = originalImageObj.height;
+
+            if (width > MAX_WIDTH) {
+                height = Math.round((MAX_WIDTH / width) * height);
+                width = MAX_WIDTH;
+            }
+
+            canvas.width = width;
+            canvas.height = height;
+
+            // Desenha a imagem original redimensionada
+            ctx.drawImage(originalImageObj, 0, 0, width, height);
+
+            const imageData = ctx.getImageData(0, 0, width, height);
             const data = imageData.data;
             const invert = document.getElementById('invert-colors').checked;
+            const threshold = parseInt(document.getElementById('threshold').value);
 
-            // Transforma a imagem em uma silhueta de alto contraste
+            // Filtro de Binarização
             for (let i = 0; i < data.length; i += 4) {
                 const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
-                // Cálculo de luminância padrão
-                const brightness = (r * 0.299 + g * 0.587 + b * 0.114);
-
-                let isBackground = a < 50 || brightness > 200; // Fundo = transparente ou claro
                 
-                if (invert) {
-                    isBackground = a < 50 || brightness < 100; // Inverte: Fundo = transparente ou escuro
+                // Ignora pixels já transparentes
+                if (a < 50) {
+                    data[i+3] = 0;
+                    continue;
                 }
 
-                if (isBackground) {
-                    data[i+3] = 0; // Deixa o pixel 100% transparente
-                } else {
-                    // Pinta o desenho de preto sólido
+                // Calcula luminosidade
+                const brightness = (r * 0.299 + g * 0.587 + b * 0.114);
+
+                let isSolid = brightness < threshold; 
+                
+                if (invert) {
+                    isSolid = brightness >= threshold; 
+                }
+
+                if (isSolid) {
+                    // Pinta de preto sólido (Relevo)
                     data[i] = 0; data[i+1] = 0; data[i+2] = 0; data[i+3] = 255; 
+                } else {
+                    // Pinta de transparente (Fundo)
+                    data[i+3] = 0; 
                 }
             }
             
             ctx.putImageData(imageData, 0, 0);
+        }
+
+        function processPreviewTo3D() {
+            const canvas = document.getElementById('preview-canvas');
             const processedDataUrl = canvas.toDataURL('image/png');
 
-            // 2. Configurações do rastreador (otimizadas para desenhos/logos monocromáticos)
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('generate-btn').disabled = true;
+
+            // Configurações do rastreador
             const tracerOptions = {
                 ltres: 1,
                 qtres: 1,
-                pathomit: 20, // Ignora pontinhos de "sujeira" da imagem
+                pathomit: 20, 
                 colorsampling: 0,
-                pal: [{r:0,g:0,b:0,a:255}, {r:255,g:255,b:255,a:0}] // Paleta forçada: Preto e Transparente
+                pal: [{r:0,g:0,b:0,a:255}, {r:255,g:255,b:255,a:0}] 
             };
 
-            // 3. Converte os pixels limpos para SVG e manda para o Three.js
+            // Processa o canvas resultante em SVG e depois para 3D
             ImageTracer.imageToSVG(processedDataUrl, function(svgString) {
                 generateKeychainFromSVG(svgString);
                 document.getElementById('loading').style.display = 'none';
+                document.getElementById('generate-btn').disabled = false;
             }, tracerOptions);
         }
 
@@ -230,13 +308,9 @@
             const svgData = loader.parse(svgText);
             const logoGroup = new THREE.Group();
 
-            const logoExtrudeSettings = {
-                depth: LOGO_THICKNESS,
-                bevelEnabled: false
-            };
+            const logoExtrudeSettings = { depth: LOGO_THICKNESS, bevelEnabled: false };
 
             for (const path of svgData.paths) {
-                // Ignora paths que possam ter vindo do fundo por segurança
                 if(path.color && path.color.getHex() !== 0x000000) continue; 
 
                 const shapes = SVGLoader.createShapes(path);
@@ -249,11 +323,8 @@
                 }
             }
 
-            // O ImageTracer gera em escala 1:1 de pixel, precisamos reduzir para milímetros (escala 0.05 geralmente funciona bem)
-            // e inverter o eixo Y, pois a tela do PC é invertida em relação ao mundo 3D
             logoGroup.scale.set(0.05, -0.05, 1); 
 
-            // Centraliza a malha da logo
             const box = new THREE.Box3().setFromObject(logoGroup);
             const center = new THREE.Vector3();
             box.getCenter(center);
@@ -267,7 +338,6 @@
             const centeredLogoContainer = new THREE.Group();
             centeredLogoContainer.add(logoGroup);
 
-            // Cria a Base do chaveiro baseada no tamanho final do desenho
             const margin = 4;
             const baseWidth = size.x + margin;
             const baseHeight = size.y + margin;
@@ -323,7 +393,7 @@
             const link = document.createElement('a');
             link.style.display = 'none';
             link.href = url;
-            link.download = 'Chaveiro_Logo_Gerado.stl';
+            link.download = 'Chaveiro_Gerado.stl';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
