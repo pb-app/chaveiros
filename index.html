@@ -1,0 +1,346 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Modelador de Chaveiro 3D - Imagens</title>
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #f0f0f0; font-family: sans-serif; }
+        #canvas-container { width: 100vw; height: 100vh; }
+        #ui-panel {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            z-index: 10;
+            max-width: 300px;
+        }
+        .user-info {
+            font-size: 13px;
+            color: #555;
+            margin-bottom: 20px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #ddd;
+        }
+        .user-info strong {
+            display: block;
+            color: #222;
+            font-size: 15px;
+        }
+        button, input[type="file"] {
+            display: block;
+            margin-top: 10px;
+            margin-bottom: 15px;
+            padding: 8px;
+            width: 100%;
+            box-sizing: border-box;
+            cursor: pointer;
+        }
+        .checkbox-group {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        .checkbox-group input {
+            margin-right: 8px;
+            cursor: pointer;
+        }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-weight: bold;
+            padding: 10px;
+        }
+        button:hover { background-color: #0056b3; }
+        h2 { margin-top: 0; font-size: 18px; margin-bottom: 5px; }
+        #loading { display: none; color: #ff6600; font-size: 14px; font-weight: bold; margin-bottom: 10px; }
+    </style>
+    
+    <!-- Biblioteca para transformar PNG/JPG em Vetor no navegador -->
+    <script src="https://cdn.jsdelivr.net/npm/imagetracerjs@1.2.6/imagetracer_v1.2.6.js"></script>
+</head>
+<body>
+
+    <div id="ui-panel">
+        <h2>Gerador de Chaveiro 3D</h2>
+        <div class="user-info">
+            <strong>Ageu Felipe Salto</strong>
+            Supervisor Turno 3
+        </div>
+
+        <label for="img-upload">1. Suba uma Logo (.PNG ou .JPG):</label>
+        <input type="file" id="img-upload" accept=".png, .jpg, .jpeg">
+        
+        <div class="checkbox-group">
+            <input type="checkbox" id="invert-colors">
+            <label for="invert-colors">Logo clara / Fundo escuro (Inverter)</label>
+        </div>
+
+        <div id="loading">Processando imagem...</div>
+        
+        <button id="export-btn" style="display:none;">2. Exportar STL</button>
+    </div>
+
+    <div id="canvas-container"></div>
+
+    <!-- Importando o Three.js e seus addons usando ES Modules -->
+    <script type="importmap">
+        {
+            "imports": {
+                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+            }
+        }
+    </script>
+
+    <script type="module">
+        import * as THREE from 'three';
+        import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+        import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
+        import { STLExporter } from 'three/addons/exporters/STLExporter.js';
+
+        let scene, camera, renderer, controls;
+        let keychainGroup; 
+
+        const BASE_THICKNESS = 3; // Altura da base em mm
+        const LOGO_THICKNESS = 2; // Altura do relevo da logo em mm
+
+        init();
+        animate();
+
+        function init() {
+            const container = document.getElementById('canvas-container');
+            scene = new THREE.Scene();
+            scene.background = new THREE.Color(0xe0e0e0);
+
+            camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
+            camera.position.set(0, -60, 60);
+
+            renderer = new THREE.WebGLRenderer({ antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.shadowMap.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            controls = new OrbitControls(camera, renderer.domElement);
+            controls.enableDamping = true;
+
+            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
+            scene.add(ambientLight);
+
+            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
+            directionalLight.position.set(10, -20, 30);
+            directionalLight.castShadow = true;
+            scene.add(directionalLight);
+
+            const gridHelper = new THREE.GridHelper(100, 10);
+            gridHelper.rotation.x = Math.PI / 2; 
+            scene.add(gridHelper);
+
+            document.getElementById('img-upload').addEventListener('change', handleImageUpload);
+            document.getElementById('export-btn').addEventListener('click', exportSTL);
+            window.addEventListener('resize', onWindowResize);
+        }
+
+        function handleImageUpload(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            document.getElementById('loading').style.display = 'block';
+            document.getElementById('export-btn').style.display = 'none';
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const img = new Image();
+                img.onload = function() {
+                    processImageTo3D(img);
+                };
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function processImageTo3D(img) {
+            // 1. Preparamos um Canvas para limpar a imagem (remover fundo branco)
+            const canvas = document.createElement('canvas');
+            canvas.width = img.width;
+            canvas.height = img.height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0);
+
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            const invert = document.getElementById('invert-colors').checked;
+
+            // Transforma a imagem em uma silhueta de alto contraste
+            for (let i = 0; i < data.length; i += 4) {
+                const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
+                // Cálculo de luminância padrão
+                const brightness = (r * 0.299 + g * 0.587 + b * 0.114);
+
+                let isBackground = a < 50 || brightness > 200; // Fundo = transparente ou claro
+                
+                if (invert) {
+                    isBackground = a < 50 || brightness < 100; // Inverte: Fundo = transparente ou escuro
+                }
+
+                if (isBackground) {
+                    data[i+3] = 0; // Deixa o pixel 100% transparente
+                } else {
+                    // Pinta o desenho de preto sólido
+                    data[i] = 0; data[i+1] = 0; data[i+2] = 0; data[i+3] = 255; 
+                }
+            }
+            
+            ctx.putImageData(imageData, 0, 0);
+            const processedDataUrl = canvas.toDataURL('image/png');
+
+            // 2. Configurações do rastreador (otimizadas para desenhos/logos monocromáticos)
+            const tracerOptions = {
+                ltres: 1,
+                qtres: 1,
+                pathomit: 20, // Ignora pontinhos de "sujeira" da imagem
+                colorsampling: 0,
+                pal: [{r:0,g:0,b:0,a:255}, {r:255,g:255,b:255,a:0}] // Paleta forçada: Preto e Transparente
+            };
+
+            // 3. Converte os pixels limpos para SVG e manda para o Three.js
+            ImageTracer.imageToSVG(processedDataUrl, function(svgString) {
+                generateKeychainFromSVG(svgString);
+                document.getElementById('loading').style.display = 'none';
+            }, tracerOptions);
+        }
+
+        function generateKeychainFromSVG(svgText) {
+            if (keychainGroup) {
+                scene.remove(keychainGroup);
+            }
+
+            keychainGroup = new THREE.Group();
+            
+            const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.5 });
+            const logoMaterial = new THREE.MeshStandardMaterial({ color: 0xff6600, roughness: 0.5 });
+
+            const loader = new SVGLoader();
+            const svgData = loader.parse(svgText);
+            const logoGroup = new THREE.Group();
+
+            const logoExtrudeSettings = {
+                depth: LOGO_THICKNESS,
+                bevelEnabled: false
+            };
+
+            for (const path of svgData.paths) {
+                // Ignora paths que possam ter vindo do fundo por segurança
+                if(path.color && path.color.getHex() !== 0x000000) continue; 
+
+                const shapes = SVGLoader.createShapes(path);
+                for (const shape of shapes) {
+                    const geometry = new THREE.ExtrudeGeometry(shape, logoExtrudeSettings);
+                    const mesh = new THREE.Mesh(geometry, logoMaterial);
+                    mesh.castShadow = true;
+                    mesh.receiveShadow = true;
+                    logoGroup.add(mesh);
+                }
+            }
+
+            // O ImageTracer gera em escala 1:1 de pixel, precisamos reduzir para milímetros (escala 0.05 geralmente funciona bem)
+            // e inverter o eixo Y, pois a tela do PC é invertida em relação ao mundo 3D
+            logoGroup.scale.set(0.05, -0.05, 1); 
+
+            // Centraliza a malha da logo
+            const box = new THREE.Box3().setFromObject(logoGroup);
+            const center = new THREE.Vector3();
+            box.getCenter(center);
+            const size = new THREE.Vector3();
+            box.getSize(size);
+
+            logoGroup.position.x = -center.x;
+            logoGroup.position.y = -center.y;
+            logoGroup.position.z = BASE_THICKNESS; 
+
+            const centeredLogoContainer = new THREE.Group();
+            centeredLogoContainer.add(logoGroup);
+
+            // Cria a Base do chaveiro baseada no tamanho final do desenho
+            const margin = 4;
+            const baseWidth = size.x + margin;
+            const baseHeight = size.y + margin;
+
+            const baseShape = createRoundedRectShape(baseWidth, baseHeight, 2); 
+            
+            const baseExtrudeSettings = {
+                depth: BASE_THICKNESS,
+                bevelEnabled: true,
+                bevelSegments: 2,
+                bevelSteps: 1,
+                bevelSize: 0.5,
+                bevelThickness: 0.5
+            };
+
+            const baseGeometry = new THREE.ExtrudeGeometry(baseShape, baseExtrudeSettings);
+            baseGeometry.translate(-baseWidth / 2, -baseHeight / 2, 0);
+
+            const baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
+            baseMesh.castShadow = true;
+            baseMesh.receiveShadow = true;
+
+            keychainGroup.add(baseMesh);
+            keychainGroup.add(centeredLogoContainer);
+
+            scene.add(keychainGroup);
+            document.getElementById('export-btn').style.display = 'block';
+        }
+
+        function createRoundedRectShape(width, height, radius) {
+            const shape = new THREE.Shape();
+            const x = 0; const y = 0;
+            shape.moveTo(x, y + radius);
+            shape.lineTo(x, y + height - radius);
+            shape.quadraticCurveTo(x, y + height, x + radius, y + height);
+            shape.lineTo(x + width - radius, y + height);
+            shape.quadraticCurveTo(x + width, y + height, x + width, y + height - radius);
+            shape.lineTo(x + width, y + radius);
+            shape.quadraticCurveTo(x + width, y, x + width - radius, y);
+            shape.lineTo(x + radius, y);
+            shape.quadraticCurveTo(x, y, x, y + radius);
+            return shape;
+        }
+
+        function exportSTL() {
+            if (!keychainGroup) return;
+            
+            const exporter = new STLExporter();
+            const stlString = exporter.parse(keychainGroup);
+            
+            const blob = new Blob([stlString], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const link = document.createElement('a');
+            link.style.display = 'none';
+            link.href = url;
+            link.download = 'Chaveiro_Logo_Gerado.stl';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }
+
+        function onWindowResize() {
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+            renderer.setSize(window.innerWidth, window.innerHeight);
+        }
+
+        function animate() {
+            requestAnimationFrame(animate);
+            controls.update();
+            renderer.render(scene, camera);
+        }
+    </script>
+</body>
+</html>
