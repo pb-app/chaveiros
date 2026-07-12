@@ -81,10 +81,8 @@
             height: auto;
             max-height: 150px;
             object-fit: contain;
-            background-image: linear-gradient(45deg, #ccc 25%, transparent 25%), linear-gradient(-45deg, #ccc 25%, transparent 25%), linear-gradient(45deg, transparent 75%, #ccc 75%), linear-gradient(-45deg, transparent 75%, #ccc 75%);
-            background-size: 20px 20px;
-            background-position: 0 0, 0 10px, 10px -10px, -10px 0px;
             border: 1px solid #aaa;
+            background-color: #fff; /* Fundo branco para visualização clara */
         }
         .help-text { font-size: 12px; color: #666; margin-bottom: 5px; display: block; }
         #loading { display: none; color: #ff6600; font-size: 14px; font-weight: bold; margin-bottom: 10px; text-align: center; }
@@ -211,14 +209,12 @@
             reader.readAsDataURL(file);
         }
 
-        // Atualiza a visualização 2D em tempo real baseada nos ajustes
         function updatePreviewCanvas() {
             if (!originalImageObj) return;
 
             const canvas = document.getElementById('preview-canvas');
-            const ctx = canvas.getContext('2d');
+            const ctx = canvas.getContext('2d', { willReadFrequently: true });
 
-            // Limita o tamanho para não travar o navegador no processamento
             const MAX_WIDTH = 600;
             let width = originalImageObj.width;
             let height = originalImageObj.height;
@@ -231,7 +227,9 @@
             canvas.width = width;
             canvas.height = height;
 
-            // Desenha a imagem original redimensionada
+            // Preenche o fundo inicial com branco sólido para anular transparências
+            ctx.fillStyle = '#ffffff';
+            ctx.fillRect(0, 0, width, height);
             ctx.drawImage(originalImageObj, 0, 0, width, height);
 
             const imageData = ctx.getImageData(0, 0, width, height);
@@ -239,19 +237,17 @@
             const invert = document.getElementById('invert-colors').checked;
             const threshold = parseInt(document.getElementById('threshold').value);
 
-            // Filtro de Binarização
+            // Filtro rigoroso: Preto Absoluto ou Branco Absoluto
             for (let i = 0; i < data.length; i += 4) {
                 const r = data[i], g = data[i+1], b = data[i+2], a = data[i+3];
                 
-                // Ignora pixels já transparentes
+                // Se era transparente, forçamos a ser branco (fundo)
                 if (a < 50) {
-                    data[i+3] = 0;
+                    data[i] = 255; data[i+1] = 255; data[i+2] = 255; data[i+3] = 255;
                     continue;
                 }
 
-                // Calcula luminosidade
                 const brightness = (r * 0.299 + g * 0.587 + b * 0.114);
-
                 let isSolid = brightness < threshold; 
                 
                 if (invert) {
@@ -259,11 +255,11 @@
                 }
 
                 if (isSolid) {
-                    // Pinta de preto sólido (Relevo)
+                    // Pinta de preto sólido (Peça 3D)
                     data[i] = 0; data[i+1] = 0; data[i+2] = 0; data[i+3] = 255; 
                 } else {
-                    // Pinta de transparente (Fundo)
-                    data[i+3] = 0; 
+                    // Pinta de branco sólido (Fundo a ser descartado)
+                    data[i] = 255; data[i+1] = 255; data[i+2] = 255; data[i+3] = 255; 
                 }
             }
             
@@ -277,16 +273,15 @@
             document.getElementById('loading').style.display = 'block';
             document.getElementById('generate-btn').disabled = true;
 
-            // Configurações do rastreador
+            // Paleta fixa para o rastreador: Só existe Preto e Branco, eliminando erros
             const tracerOptions = {
                 ltres: 1,
                 qtres: 1,
-                pathomit: 20, 
+                pathomit: 10, // Tolerância para detalhes pequenos
                 colorsampling: 0,
-                pal: [{r:0,g:0,b:0,a:255}, {r:255,g:255,b:255,a:0}] 
+                pal: [{r:0,g:0,b:0,a:255}, {r:255,g:255,b:255,a:255}] 
             };
 
-            // Processa o canvas resultante em SVG e depois para 3D
             ImageTracer.imageToSVG(processedDataUrl, function(svgString) {
                 generateKeychainFromSVG(svgString);
                 document.getElementById('loading').style.display = 'none';
@@ -311,7 +306,17 @@
             const logoExtrudeSettings = { depth: LOGO_THICKNESS, bevelEnabled: false };
 
             for (const path of svgData.paths) {
-                if(path.color && path.color.getHex() !== 0x000000) continue; 
+                // SEGREDO AQUI: O motor SVGLoader tenta ler a cor do caminho.
+                // Tudo que for claro (branco), nós ignoramos, pois é o fundo da imagem.
+                if (path.color) {
+                    const r = path.color.r;
+                    const g = path.color.g;
+                    const b = path.color.b;
+                    // Se os valores RGB estiverem altos, é um tom claro/branco. Pula essa etapa.
+                    if (r > 0.8 && g > 0.8 && b > 0.8) {
+                        continue; 
+                    }
+                }
 
                 const shapes = SVGLoader.createShapes(path);
                 for (const shape of shapes) {
@@ -323,14 +328,24 @@
                 }
             }
 
+            // Escala a logo
             logoGroup.scale.set(0.05, -0.05, 1); 
 
+            // Mede o tamanho e acha o centro do que foi gerado
             const box = new THREE.Box3().setFromObject(logoGroup);
+            
+            // Verificação de segurança: se nada for desenhado
+            if (box.isEmpty()) {
+                alert("Nenhum detalhe escuro encontrado. Ajuste a barra de detalhe.");
+                return;
+            }
+
             const center = new THREE.Vector3();
             box.getCenter(center);
             const size = new THREE.Vector3();
             box.getSize(size);
 
+            // Alinha
             logoGroup.position.x = -center.x;
             logoGroup.position.y = -center.y;
             logoGroup.position.z = BASE_THICKNESS; 
@@ -338,6 +353,7 @@
             const centeredLogoContainer = new THREE.Group();
             centeredLogoContainer.add(logoGroup);
 
+            // Cria a base da proporção correta
             const margin = 4;
             const baseWidth = size.x + margin;
             const baseHeight = size.y + margin;
@@ -393,7 +409,7 @@
             const link = document.createElement('a');
             link.style.display = 'none';
             link.href = url;
-            link.download = 'Chaveiro_Gerado.stl';
+            link.download = 'Chaveiro_Driele_Gerado.stl';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
