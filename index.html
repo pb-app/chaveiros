@@ -20,63 +20,24 @@
             max-height: 90vh;
             overflow-y: auto;
         }
-        .user-info {
-            font-size: 13px;
-            color: #555;
-            margin-bottom: 20px;
-            padding-bottom: 10px;
-            border-bottom: 1px solid #ddd;
-        }
-        .user-info strong {
-            display: block;
-            color: #222;
-            font-size: 15px;
-        }
+        .user-info { font-size: 13px; color: #555; margin-bottom: 20px; padding-bottom: 10px; border-bottom: 1px solid #ddd; }
+        .user-info strong { display: block; color: #222; font-size: 15px; }
         button, input[type="file"], input[type="range"], select, input[type="number"] {
-            display: block;
-            margin-top: 5px;
-            margin-bottom: 15px;
-            width: 100%;
-            box-sizing: border-box;
-            cursor: pointer;
-            padding: 8px;
-            border: 1px solid #ccc;
-            border-radius: 4px;
+            display: block; margin-top: 5px; margin-bottom: 15px; width: 100%; box-sizing: border-box; cursor: pointer; padding: 8px; border: 1px solid #ccc; border-radius: 4px;
         }
-        .checkbox-group {
-            display: flex;
-            align-items: center;
-            margin-bottom: 15px;
-            font-size: 14px;
-            background: #f9f9f9;
-            padding: 8px;
-            border-radius: 4px;
-            border: 1px solid #eee;
-        }
-        .checkbox-group input { margin-right: 8px; cursor: pointer; width: auto; margin-bottom: 0; }
         .row-group { display: flex; gap: 8px; margin-bottom: 15px; }
         .row-group div { flex: 1; }
         .row-group label { font-size: 11px; font-weight: bold; }
-        
-        button {
-            background-color: #007bff; color: white; border: none; font-weight: bold; padding: 12px; transition: background 0.2s;
-        }
+        button { background-color: #007bff; color: white; border: none; font-weight: bold; padding: 12px; transition: background 0.2s; }
         button:hover { background-color: #0056b3; }
         button:disabled { background-color: #ccc; cursor: not-allowed; }
         #export-btn { background-color: #28a745; margin-top: 10px; }
-        #export-btn:hover { background-color: #218838; }
         h2 { margin-top: 0; font-size: 18px; margin-bottom: 5px; }
-        
-        #preview-container {
-            display: none; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #fafafa;
-        }
-        #preview-canvas {
-            width: 100%; height: auto; max-height: 150px; object-fit: contain; border: 1px solid #aaa; background-color: #fff; margin-bottom: 10px;
-        }
+        #preview-container { display: none; padding: 15px; border: 1px solid #ddd; border-radius: 4px; background: #fafafa; }
+        #preview-canvas { width: 100%; height: auto; max-height: 150px; object-fit: contain; border: 1px solid #aaa; background-color: #fff; margin-bottom: 10px; }
         .help-text { font-size: 12px; color: #666; margin-bottom: 5px; display: block; font-weight: bold; }
         #loading { display: none; color: #ff6600; font-size: 14px; font-weight: bold; margin-bottom: 10px; text-align: center; }
     </style>
-    
     <script src="https://cdn.jsdelivr.net/npm/imagetracerjs@1.2.6/imagetracer_v1.2.6.js"></script>
 </head>
 <body>
@@ -94,62 +55,40 @@
         <div id="preview-container">
             <canvas id="preview-canvas"></canvas>
 
-            <label class="help-text" style="color:#d9534f;">Estilo do Relevo (Desenho):</label>
+            <label class="help-text" style="color:#d9534f;">Estilo do Relevo:</label>
             <select id="extraction-mode">
-                <option value="silhouette">Letras Maciças (Usa silhueta do PNG)</option>
-                <option value="contrast">Letras Vazadas (Traça por Contraste)</option>
+                <option value="silhouette">Letras Maciças (Silhueta)</option>
+                <option value="contrast">Letras Vazadas (Contraste)</option>
             </select>
             
             <div id="contrast-controls" style="display:none; padding: 10px; background: #eee; border-radius: 4px; margin-bottom: 15px;">
-                <div class="checkbox-group" style="margin-bottom: 10px; border: none; padding: 0;">
-                    <input type="checkbox" id="invert-colors">
-                    <label for="invert-colors">Inverter Fundo</label>
-                </div>
                 <label for="threshold" class="help-text">Ajuste de Detalhe:</label>
-                <input type="range" id="threshold" min="1" max="254" value="128" style="margin-bottom: 0;">
+                <input type="range" id="threshold" min="1" max="254" value="128">
             </div>
-
-            <hr style="border: 0; border-top: 1px solid #ddd; margin: 15px 0;">
 
             <label class="help-text">Formato da Base:</label>
             <select id="base-shape">
                 <option value="contour">Contorno da Logo</option>
-                <option value="rect">Retângulo Arredondado</option>
+                <option value="rect">Retângulo</option>
                 <option value="circle">Círculo</option>
             </select>
 
             <div class="row-group">
-                <div>
-                    <label>Base (mm):</label>
-                    <input type="number" id="base-thickness" value="3" min="1" max="20" step="0.5">
-                </div>
-                <div>
-                    <label>Relevo (mm):</label>
-                    <input type="number" id="logo-thickness" value="2" min="0.5" max="20" step="0.5">
-                </div>
-                <div>
-                    <label>Margem (mm):</label>
-                    <input type="number" id="base-margin" value="4" min="0" max="20" step="0.5">
-                </div>
+                <div><label>Base (mm):</label><input type="number" id="base-thickness" value="3" min="1" step="0.5"></div>
+                <div><label>Relevo (mm):</label><input type="number" id="logo-thickness" value="2" min="0.5" step="0.5"></div>
+                <div><label>Margem (mm):</label><input type="number" id="base-margin" value="4" min="0" step="0.5"></div>
             </div>
 
             <button id="generate-btn">2. Gerar 3D</button>
         </div>
-
-        <div id="loading">Modelando peças... aguarde.</div>
-        
+        <div id="loading">Modelando peças...</div>
         <button id="export-btn" style="display:none;">3. Exportar STL</button>
     </div>
 
     <div id="canvas-container"></div>
 
     <script type="importmap">
-        {
-            "imports": {
-                "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
-                "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
-            }
-        }
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js", "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/" } }
     </script>
 
     <script type="module">
@@ -158,338 +97,97 @@
         import { SVGLoader } from 'three/addons/loaders/SVGLoader.js';
         import { STLExporter } from 'three/addons/exporters/STLExporter.js';
 
-        let scene, camera, renderer, controls;
-        let keychainGroup; 
-        let originalImageObj = null;
-
-        init();
-        animate();
+        let scene, camera, renderer, controls, keychainGroup, originalImageObj = null;
 
         function init() {
-            const container = document.getElementById('canvas-container');
-            scene = new THREE.Scene();
-            scene.background = new THREE.Color(0xe0e0e0);
-
+            scene = new THREE.Scene(); scene.background = new THREE.Color(0xe0e0e0);
             camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 1000);
             camera.position.set(0, -80, 80);
-
             renderer = new THREE.WebGLRenderer({ antialias: true });
             renderer.setSize(window.innerWidth, window.innerHeight);
-            renderer.shadowMap.enabled = true;
-            container.appendChild(renderer.domElement);
-
+            document.getElementById('canvas-container').appendChild(renderer.domElement);
             controls = new OrbitControls(camera, renderer.domElement);
-            controls.enableDamping = true;
-
-            const ambientLight = new THREE.AmbientLight(0xffffff, 0.6);
-            scene.add(ambientLight);
-
-            const directionalLight = new THREE.DirectionalLight(0xffffff, 0.8);
-            directionalLight.position.set(10, -20, 30);
-            directionalLight.castShadow = true;
-            scene.add(directionalLight);
-
-            const gridHelper = new THREE.GridHelper(150, 15);
-            gridHelper.rotation.x = Math.PI / 2; 
-            scene.add(gridHelper);
-
+            scene.add(new THREE.AmbientLight(0xffffff, 0.6));
+            const dl = new THREE.DirectionalLight(0xffffff, 0.8); dl.position.set(10, -20, 30); scene.add(dl);
             document.getElementById('img-upload').addEventListener('change', handleImageUpload);
-            document.getElementById('threshold').addEventListener('input', updatePreviewCanvas);
-            document.getElementById('invert-colors').addEventListener('change', updatePreviewCanvas);
-            document.getElementById('extraction-mode').addEventListener('change', function() {
-                const isContrast = this.value === 'contrast';
-                document.getElementById('contrast-controls').style.display = isContrast ? 'block' : 'none';
+            document.getElementById('extraction-mode').addEventListener('change', e => {
+                document.getElementById('contrast-controls').style.display = e.target.value === 'contrast' ? 'block' : 'none';
                 updatePreviewCanvas();
             });
             document.getElementById('generate-btn').addEventListener('click', processPreviewTo3D);
             document.getElementById('export-btn').addEventListener('click', exportSTL);
-            window.addEventListener('resize', onWindowResize);
         }
 
-        function handleImageUpload(event) {
-            const file = event.target.files[0];
-            if (!file) return;
-
-            document.getElementById('export-btn').style.display = 'none';
-            if (keychainGroup) scene.remove(keychainGroup);
-
+        function handleImageUpload(e) {
             const reader = new FileReader();
-            reader.onload = function(e) {
-                const img = new Image();
-                img.onload = function() {
-                    originalImageObj = img;
-                    document.getElementById('preview-container').style.display = 'block';
-                    updatePreviewCanvas();
-                };
-                img.src = e.target.result;
-            };
-            reader.readAsDataURL(file);
+            reader.onload = e => { const img = new Image(); img.onload = () => { originalImageObj = img; document.getElementById('preview-container').style.display = 'block'; updatePreviewCanvas(); }; img.src = e.target.result; };
+            reader.readAsDataURL(e.target.files[0]);
         }
 
         function updatePreviewCanvas() {
             if (!originalImageObj) return;
-
-            const canvas = document.getElementById('preview-canvas');
-            const ctx = canvas.getContext('2d', { willReadFrequently: true });
-
-            const MAX_WIDTH = 600;
-            let width = originalImageObj.width;
-            let height = originalImageObj.height;
-
-            if (width > MAX_WIDTH) {
-                height = Math.round((MAX_WIDTH / width) * height);
-                width = MAX_WIDTH;
-            }
-
-            canvas.width = width;
-            canvas.height = height;
-
-            ctx.fillStyle = '#ffffff';
-            ctx.fillRect(0, 0, width, height);
-            ctx.drawImage(originalImageObj, 0, 0, width, height);
-
-            const imageData = ctx.getImageData(0, 0, width, height);
-            const data = imageData.data;
-            
-            const extractionMode = document.getElementById('extraction-mode').value;
-            const invert = document.getElementById('invert-colors').checked;
+            const canvas = document.getElementById('preview-canvas'), ctx = canvas.getContext('2d', { willReadFrequently: true });
+            canvas.width = originalImageObj.width; canvas.height = originalImageObj.height;
+            ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(originalImageObj, 0, 0);
+            const data = ctx.getImageData(0, 0, canvas.width, canvas.height).data;
+            const mode = document.getElementById('extraction-mode').value;
             const threshold = parseInt(document.getElementById('threshold').value);
 
             for (let i = 0; i < data.length; i += 4) {
-                const alpha = data[i+3];
-
-                if (extractionMode === 'silhouette') {
-                    if (alpha > 20) {
-                        data[i] = 0; data[i+1] = 0; data[i+2] = 0; data[i+3] = 255; 
-                    } else {
-                        data[i] = 255; data[i+1] = 255; data[i+2] = 255; data[i+3] = 255; 
-                    }
-                } else {
-                    if (alpha < 50) {
-                        data[i] = 255; data[i+1] = 255; data[i+2] = 255; data[i+3] = 255;
-                        continue;
-                    }
-
-                    const brightness = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114);
-                    let isSolid = brightness < threshold; 
-                    if (invert) isSolid = brightness >= threshold; 
-
-                    if (isSolid) {
-                        data[i] = 0; data[i+1] = 0; data[i+2] = 0; data[i+3] = 255; 
-                    } else {
-                        data[i] = 255; data[i+1] = 255; data[i+2] = 255; data[i+3] = 255; 
-                    }
-                }
+                const alpha = data[i+3], brightness = (data[i] * 0.299 + data[i+1] * 0.587 + data[i+2] * 0.114);
+                let isSolid = mode === 'silhouette' ? (alpha > 50) : (brightness < threshold);
+                data[i] = data[i+1] = data[i+2] = isSolid ? 0 : 255;
             }
-            ctx.putImageData(imageData, 0, 0);
-        }
-
-        function traceToSVG(dataUrl, options) {
-            return new Promise(resolve => {
-                ImageTracer.imageToSVG(dataUrl, resolve, options);
-            });
+            ctx.putImageData(new ImageData(data, canvas.width, canvas.height), 0, 0);
         }
 
         async function processPreviewTo3D() {
             document.getElementById('loading').style.display = 'block';
-            document.getElementById('generate-btn').disabled = true;
-
-            const baseShapeType = document.getElementById('base-shape').value;
-            const marginInput = parseFloat(document.getElementById('base-margin').value);
-            const previewCanvas = document.getElementById('preview-canvas');
-            const logoDataUrl = previewCanvas.toDataURL('image/png');
-
-            const tracerOptions = {
-                ltres: 1, qtres: 1, pathomit: 10, colorsampling: 0,
-                pal: [{r:0,g:0,b:0,a:255}, {r:255,g:255,b:255,a:255}] 
-            };
-
-            try {
-                const logoSvg = await traceToSVG(logoDataUrl, tracerOptions);
-                let contourSvg = null;
-
-                if (baseShapeType === 'contour') {
-                    const offCanvas = document.createElement('canvas');
-                    offCanvas.width = previewCanvas.width;
-                    offCanvas.height = previewCanvas.height;
-                    const offCtx = offCanvas.getContext('2d');
-                    
-                    // Converte os milímetros digitados em um raio de blur na imagem (proporção aprox. de 1mm = 4px)
-                    const blurAmount = marginInput * 4; 
-                    
-                    if (blurAmount > 0) {
-                        offCtx.filter = `blur(${blurAmount}px)`;
-                        for(let i=0; i<5; i++) offCtx.drawImage(previewCanvas, 0, 0);
-                        offCtx.filter = 'none';
-                    } else {
-                        offCtx.drawImage(previewCanvas, 0, 0);
-                    }
-
-                    const imgData = offCtx.getImageData(0,0,offCanvas.width, offCanvas.height);
-                    const data = imgData.data;
-                    
-                    for(let i=0; i<data.length; i+=4) {
-                        const brightness = (data[i] + data[i+1] + data[i+2]) / 3;
-                        if (brightness < 245) { 
-                            data[i] = 0; data[i+1] = 0; data[i+2] = 0; data[i+3] = 255;
-                        } else {
-                            data[i] = 255; data[i+1] = 255; data[i+2] = 255; data[i+3] = 255;
-                        }
-                    }
-                    offCtx.putImageData(imgData, 0, 0);
-                    contourSvg = await traceToSVG(offCanvas.toDataURL('image/png'), tracerOptions);
-                }
-
-                build3DScene(logoSvg, contourSvg);
-
-            } catch (error) {
-                console.error(error);
-                alert("Erro ao processar imagem.");
+            const canvas = document.getElementById('preview-canvas'), tracerOptions = { ltres: 0.1, qtres: 1, pathomit: 5, pal: [{r:0,g:0,b:0,a:255}, {r:255,g:255,b:255,a:255}] };
+            
+            const logoSvg = await new Promise(r => ImageTracer.imageToSVG(canvas.toDataURL(), r, tracerOptions));
+            let contourSvg = null;
+            if (document.getElementById('base-shape').value === 'contour') {
+                const off = document.createElement('canvas'); off.width = canvas.width; off.height = canvas.height;
+                const ctx = off.getContext('2d'); ctx.filter = `blur(${parseFloat(document.getElementById('base-margin').value)*5}px)`;
+                ctx.drawImage(canvas, 0, 0);
+                const d = ctx.getImageData(0,0,off.width, off.height).data;
+                for(let i=0; i<d.length; i+=4) d[i]=d[i+1]=d[i+2] = (d[i]+d[i+1]+d[i+2])/3 < 240 ? 0 : 255;
+                ctx.putImageData(new ImageData(d, off.width, off.height), 0, 0);
+                contourSvg = await new Promise(r => ImageTracer.imageToSVG(off.toDataURL(), r, tracerOptions));
             }
-
+            build3D(logoSvg, contourSvg);
             document.getElementById('loading').style.display = 'none';
-            document.getElementById('generate-btn').disabled = false;
         }
 
-        function build3DScene(logoSvgText, contourSvgText) {
+        function build3D(logoSvg, contourSvg) {
             if (keychainGroup) scene.remove(keychainGroup);
             keychainGroup = new THREE.Group();
+            const loader = new SVGLoader(), bT = parseFloat(document.getElementById('base-thickness').value), lT = parseFloat(document.getElementById('logo-thickness').value);
             
-            const baseThick = parseFloat(document.getElementById('base-thickness').value);
-            const logoThick = parseFloat(document.getElementById('logo-thickness').value);
-            const margin = parseFloat(document.getElementById('base-margin').value);
-            const baseShapeType = document.getElementById('base-shape').value;
-
-            const baseMaterial = new THREE.MeshStandardMaterial({ color: 0x222222, roughness: 0.6 });
-            const logoMaterial = new THREE.MeshStandardMaterial({ color: 0xff6600, roughness: 0.4 });
-
-            const loader = new SVGLoader();
-            const logoGroup = new THREE.Group();
-
-            const logoSvgData = loader.parse(logoSvgText);
-            const logoExtrudeSettings = { depth: logoThick, bevelEnabled: false };
-
-            for (const path of logoSvgData.paths) {
-                if (path.color && (path.color.r > 0.8 && path.color.g > 0.8 && path.color.b > 0.8)) continue; 
-                const shapes = SVGLoader.createShapes(path);
-                for (const shape of shapes) {
-                    const mesh = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, logoExtrudeSettings), logoMaterial);
-                    mesh.castShadow = true; mesh.receiveShadow = true;
-                    logoGroup.add(mesh);
-                }
-            }
-
-            const GLOBAL_SCALE = 0.05;
-            logoGroup.scale.set(GLOBAL_SCALE, -GLOBAL_SCALE, 1); 
-
-            const box = new THREE.Box3().setFromObject(logoGroup);
-            if (box.isEmpty()) return;
-
-            const center = new THREE.Vector3();
-            box.getCenter(center);
-            const size = new THREE.Vector3();
-            box.getSize(size);
-
-            logoGroup.position.set(-center.x, -center.y, baseThick);
+            const addMesh = (svg, mat, depth, z) => {
+                loader.parse(svg).paths.forEach(p => {
+                    if (p.color.r < 0.5) p.toShapes(true).forEach(s => {
+                        const m = new THREE.Mesh(new THREE.ExtrudeGeometry(s, { depth, bevelEnabled: false }), mat);
+                        m.position.z = z; keychainGroup.add(m);
+                    });
+                });
+            };
             
-            const centeredLogoContainer = new THREE.Group();
-            centeredLogoContainer.add(logoGroup);
-            keychainGroup.add(centeredLogoContainer);
-
-            if (baseShapeType === 'contour' && contourSvgText) {
-                const baseGroup = new THREE.Group();
-                const baseSvgData = loader.parse(contourSvgText);
-                const baseExtrudeSettings = { depth: baseThick, bevelEnabled: false }; 
-
-                for (const path of baseSvgData.paths) {
-                    if (path.color && (path.color.r > 0.8 && path.color.g > 0.8 && path.color.b > 0.8)) continue;
-                    const shapes = SVGLoader.createShapes(path);
-                    for (const shape of shapes) {
-                        const mesh = new THREE.Mesh(new THREE.ExtrudeGeometry(shape, baseExtrudeSettings), baseMaterial);
-                        mesh.castShadow = true; mesh.receiveShadow = true;
-                        baseGroup.add(mesh);
-                    }
-                }
-
-                baseGroup.scale.set(GLOBAL_SCALE, -GLOBAL_SCALE, 1);
-                baseGroup.position.set(-center.x, -center.y, 0);
-                keychainGroup.add(baseGroup);
-
-            } else {
-                let baseShape;
-
-                if (baseShapeType === 'rect') {
-                    const baseWidth = size.x + margin * 2;
-                    const baseHeight = size.y + margin * 2;
-                    // Se a margem for muito pequena, o raio de arredondamento também deve diminuir para não bugar
-                    const cornerRadius = Math.min(3, Math.max(0.5, margin)); 
-                    baseShape = createRoundedRectShape(baseWidth, baseHeight, cornerRadius);
-                } else if (baseShapeType === 'circle') {
-                    const radius = (Math.max(size.x, size.y) / 2) + margin;
-                    baseShape = new THREE.Shape().absarc(0, 0, radius, 0, Math.PI * 2);
-                }
-
-                const baseExtrudeSettings = {
-                    depth: baseThick, bevelEnabled: true, bevelSegments: 2, bevelSteps: 1, bevelSize: 0.5, bevelThickness: 0.5
-                };
-
-                const baseGeometry = new THREE.ExtrudeGeometry(baseShape, baseExtrudeSettings);
-                
-                if (baseShapeType === 'rect') {
-                    baseGeometry.translate(-(size.x + margin*2)/2, -(size.y + margin*2)/2, 0);
-                }
-                
-                const baseMesh = new THREE.Mesh(baseGeometry, baseMaterial);
-                baseMesh.castShadow = true; baseMesh.receiveShadow = true;
-                keychainGroup.add(baseMesh);
-            }
-
+            addMesh(logoSvg, new THREE.MeshStandardMaterial({color: 0xff6600}), lT, bT);
+            if (contourSvg) addMesh(contourSvg, new THREE.MeshStandardMaterial({color: 0x222222}), bT, 0);
+            
             scene.add(keychainGroup);
             document.getElementById('export-btn').style.display = 'block';
         }
 
-        function createRoundedRectShape(width, height, radius) {
-            const shape = new THREE.Shape();
-            const x = 0; const y = 0;
-            shape.moveTo(x, y + radius);
-            shape.lineTo(x, y + height - radius);
-            shape.quadraticCurveTo(x, y + height, x + radius, y + height);
-            shape.lineTo(x + width - radius, y + height);
-            shape.quadraticCurveTo(x + width, y + height, x + width, y + height - radius);
-            shape.lineTo(x + width, y + radius);
-            shape.quadraticCurveTo(x + width, y, x + width - radius, y);
-            shape.lineTo(x + radius, y);
-            shape.quadraticCurveTo(x, y, x, y + radius);
-            return shape;
-        }
-
         function exportSTL() {
-            if (!keychainGroup) return;
-            const exporter = new STLExporter();
-            const stlString = exporter.parse(keychainGroup);
-            
-            const blob = new Blob([stlString], { type: 'text/plain' });
-            const url = URL.createObjectURL(blob);
-            const link = document.createElement('a');
-            link.href = url;
-            link.download = 'Chaveiro_Personalizado_3D.stl';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
+            const str = new STLExporter().parse(keychainGroup);
+            const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([str])); a.download = 'Chaveiro.stl'; a.click();
         }
-
-        function onWindowResize() {
-            camera.aspect = window.innerWidth / window.innerHeight;
-            camera.updateProjectionMatrix();
-            renderer.setSize(window.innerWidth, window.innerHeight);
-        }
-
-        function animate() {
-            requestAnimationFrame(animate);
-            controls.update();
-            renderer.render(scene, camera);
-        }
+        function animate() { requestAnimationFrame(animate); controls.update(); renderer.render(scene, camera); }
+        animate();
     </script>
 </body>
 </html>
